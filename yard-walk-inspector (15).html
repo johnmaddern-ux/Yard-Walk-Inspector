@@ -1,0 +1,835 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Yard Walk Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --amber:#D4900A;--amber-light:#FFF4DC;--amber-dark:#8B5E00;
+  --red:#C13333;--red-light:#FFEAEA;--red-dark:#7A1F1F;
+  --green:#267A4A;--green-light:#E8F5EE;--green-dark:#164D2E;
+  --blue:#1E5CB3;--blue-light:#EBF1FB;
+  --gray-50:#F8F7F5;--gray-100:#EEECE8;--gray-200:#D8D6D0;
+  --gray-400:#9B9A96;--gray-600:#5D5C58;--gray-800:#2C2C2A;--gray-900:#1A1A18;
+  --text:#1A1A18;--text-muted:#5D5C58;
+  --surface:#FFFFFF;--surface-2:#F5F4F1;
+  --border:rgba(0,0,0,0.09);--border-strong:rgba(0,0,0,0.18);
+  --r:10px;--r-sm:6px;
+  --font-h:'Barlow Condensed',sans-serif;
+  --font-b:'Barlow',sans-serif;
+}
+body{
+  font-family:var(--font-b);background:var(--surface-2);color:var(--text);
+  min-height:100vh;overscroll-behavior:none;
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px);
+}
+
+/* Header */
+.app-header{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:14px 20px 0;position:sticky;top:0;z-index:100;
+}
+.app-title{
+  font-family:var(--font-h);font-size:21px;font-weight:700;
+  letter-spacing:0.5px;display:flex;align-items:center;gap:9px;margin-bottom:14px;
+}
+.title-dot{
+  width:9px;height:9px;background:var(--amber);border-radius:50%;flex-shrink:0;
+}
+.tab-bar{display:flex;}
+.tab-btn{
+  flex:1;background:none;border:none;border-bottom:3px solid transparent;
+  padding:10px 4px;font-family:var(--font-h);font-size:13px;font-weight:700;
+  letter-spacing:1px;color:var(--text-muted);cursor:pointer;transition:all 0.15s;
+  text-transform:uppercase;
+}
+.tab-btn.active{color:var(--amber-dark);border-bottom-color:var(--amber);}
+
+/* Views */
+.view{display:none;padding:18px 16px;}
+.view.active{display:block;}
+
+/* Camera */
+.camera-frame{
+  width:100%;aspect-ratio:4/3;background:var(--gray-800);border-radius:var(--r);
+  overflow:hidden;position:relative;display:flex;align-items:center;
+  justify-content:center;margin-bottom:12px;
+}
+#video-feed{width:100%;height:100%;object-fit:cover;display:none;}
+#photo-preview{width:100%;height:100%;object-fit:cover;display:none;}
+.cam-placeholder{text-align:center;color:var(--gray-400);}
+.cam-placeholder-icon{font-size:44px;display:block;margin-bottom:8px;}
+.cam-placeholder-txt{font-size:13px;}
+.ts-overlay{
+  position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.68);
+  color:#FFD166;font-size:11px;font-family:monospace;padding:7px 10px;
+  letter-spacing:0.3px;display:none;
+}
+
+/* Buttons */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:14px 18px;border-radius:var(--r-sm);border:none;
+  font-family:var(--font-h);font-size:15px;font-weight:700;letter-spacing:0.5px;
+  cursor:pointer;transition:opacity 0.15s,transform 0.1s;width:100%;margin-bottom:8px;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn:active{transform:scale(0.98);opacity:0.82;}
+.btn-amber{background:var(--amber);color:#fff;}
+.btn-outline{background:transparent;border:1.5px solid var(--border-strong);color:var(--text);}
+.btn-success{background:var(--green);color:#fff;}
+.btn-row{display:flex;gap:8px;}
+.btn-row .btn{margin-bottom:0;}
+#capture-canvas{display:none;}
+
+/* Card */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:16px;margin-bottom:12px;
+}
+
+/* Form */
+.form-group{margin-bottom:14px;}
+.form-label{
+  font-family:var(--font-h);font-size:11px;font-weight:700;letter-spacing:1.2px;
+  color:var(--text-muted);text-transform:uppercase;display:block;margin-bottom:6px;
+}
+textarea,select,input[type=text]{
+  width:100%;padding:12px 14px;border:1.5px solid var(--border-strong);
+  border-radius:var(--r-sm);font-family:var(--font-b);font-size:15px;
+  color:var(--text);background:var(--surface);outline:none;
+  transition:border-color 0.15s;-webkit-appearance:none;appearance:none;
+}
+textarea:focus,select:focus,input[type=text]:focus{border-color:var(--amber);}
+textarea{resize:none;min-height:88px;line-height:1.5;}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235D5C58' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;}
+
+/* Voice button */
+.voice-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;
+  background:var(--blue-light);border:1.5px solid var(--blue);border-radius:var(--r-sm);
+  color:var(--blue);font-family:var(--font-h);font-size:14px;font-weight:700;
+  letter-spacing:0.5px;cursor:pointer;width:100%;margin-bottom:12px;
+  transition:all 0.15s;-webkit-tap-highlight-color:transparent;
+}
+.voice-btn.listening{
+  background:var(--red-light);border-color:var(--red);color:var(--red);
+  animation:pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.65;}}
+
+/* Task cards */
+.task-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:13px;margin-bottom:10px;display:flex;gap:12px;
+}
+.task-card.overdue{border-left:3px solid var(--red);}
+.task-card.complete{opacity:0.52;}
+.task-thumb{
+  width:64px;height:64px;border-radius:var(--r-sm);flex-shrink:0;
+  background:var(--gray-100);display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+.task-thumb img{width:100%;height:100%;object-fit:cover;}
+.task-body{flex:1;min-width:0;}
+.task-desc{
+  font-size:13px;font-weight:500;color:var(--text);margin-bottom:6px;line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.task-meta{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+.badge{
+  font-family:var(--font-h);font-size:10px;font-weight:700;letter-spacing:0.6px;
+  padding:3px 7px;border-radius:4px;text-transform:uppercase;white-space:nowrap;
+}
+.badge-amber{background:var(--amber-light);color:var(--amber-dark);}
+.badge-red{background:var(--red-light);color:var(--red-dark);}
+.badge-green{background:var(--green-light);color:var(--green-dark);}
+.badge-gray{background:var(--gray-100);color:var(--gray-600);}
+.task-date{font-size:11px;color:var(--text-muted);margin-bottom:8px;}
+.complete-btn{
+  background:none;border:1.5px solid var(--border-strong);border-radius:var(--r-sm);
+  padding:6px 12px;font-family:var(--font-h);font-size:11px;font-weight:700;
+  letter-spacing:0.5px;color:var(--text-muted);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:all 0.15s;
+}
+.complete-btn:active{transform:scale(0.97);}
+
+/* Filters */
+.filter-row{display:flex;gap:8px;margin-bottom:14px;}
+.filter-row select{flex:1;padding:9px 32px 9px 11px;font-size:13px;}
+.filter-count{
+  font-family:var(--font-h);font-size:11px;font-weight:700;letter-spacing:0.5px;
+  color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;
+}
+
+/* Dashboard */
+.stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:20px;}
+.stat-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;
+}
+.stat-label{
+  font-family:var(--font-h);font-size:10px;font-weight:700;letter-spacing:1.2px;
+  color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;
+}
+.stat-value{font-family:var(--font-h);font-size:36px;font-weight:700;color:var(--text);line-height:1;}
+.stat-card.danger .stat-value{color:var(--red);}
+.stat-card.success .stat-value{color:var(--green);}
+.stat-card.warning .stat-value{color:var(--amber-dark);}
+.section-title{
+  font-family:var(--font-h);font-size:11px;font-weight:700;letter-spacing:1.2px;
+  text-transform:uppercase;color:var(--text-muted);margin-bottom:10px;
+}
+
+/* Member rows */
+.member-row{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:13px 14px;margin-bottom:8px;
+}
+.member-row-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:9px;gap:8px;}
+.member-name{font-size:14px;font-weight:600;color:var(--text);flex-shrink:0;}
+.member-counts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;}
+.progress-bar{height:5px;background:var(--gray-100);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;background:var(--amber);transition:width 0.4s ease;}
+.progress-fill.danger{background:var(--red);}
+
+/* Add member */
+.add-member-row{display:flex;gap:8px;margin-bottom:16px;}
+.add-member-row input{flex:1;padding:10px 12px;font-size:14px;}
+.add-member-btn{
+  padding:10px 16px;background:var(--amber);border:none;border-radius:var(--r-sm);
+  color:#fff;font-family:var(--font-h);font-size:14px;font-weight:700;
+  cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;
+}
+.add-member-btn:active{opacity:0.82;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:44px 20px;color:var(--text-muted);}
+.empty-state-icon{font-size:40px;display:block;margin-bottom:12px;}
+.empty-state-text{font-size:14px;}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(120px);
+  background:var(--gray-900);color:#fff;padding:12px 22px;border-radius:24px;
+  font-size:14px;font-weight:500;z-index:999;transition:transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+  white-space:nowrap;pointer-events:none;
+}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* Overdue card */
+.overdue-item{
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--red);
+  border-radius:var(--r);padding:13px 14px;margin-bottom:8px;
+}
+.overdue-item-desc{font-size:13px;font-weight:500;margin-bottom:7px;line-height:1.4;}
+.overdue-item-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.overdue-item-date{font-size:11px;color:var(--text-muted);}
+
+/* Photo modal */
+.photo-modal{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:200;
+  align-items:center;justify-content:center;padding:20px;
+}
+.photo-modal.open{display:flex;}
+.photo-modal img{max-width:100%;max-height:80vh;border-radius:var(--r);object-fit:contain;}
+.photo-modal-close{
+  position:absolute;top:20px;right:20px;width:40px;height:40px;border-radius:50%;
+  background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="app-header">
+  <div class="app-title">
+    <span class="title-dot"></span>
+    YARD WALK INSPECTOR
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchView('capture')">CAPTURE</button>
+    <button class="tab-btn" onclick="switchView('tasks')">TASKS <span id="pending-badge"></span></button>
+    <button class="tab-btn" onclick="switchView('dashboard')">DASHBOARD</button>
+  </div>
+</div>
+
+<!-- ───── CAPTURE VIEW ───── -->
+<div class="view active" id="view-capture">
+
+  <div class="camera-frame" id="camera-frame">
+    <video id="video-feed" autoplay playsinline muted></video>
+    <img id="photo-preview" alt="Captured photo">
+    <div class="cam-placeholder" id="cam-placeholder">
+      <span class="cam-placeholder-icon">📷</span>
+      <div class="cam-placeholder-txt">Tap "Open Camera" to start</div>
+    </div>
+    <div class="ts-overlay" id="ts-overlay"></div>
+  </div>
+  <canvas id="capture-canvas"></canvas>
+
+  <div class="btn-row" id="camera-controls">
+    <button class="btn btn-amber" onclick="openCamera()">Open Camera</button>
+  </div>
+
+  <div style="height:14px;"></div>
+
+  <div class="card">
+    <div class="form-group">
+      <label class="form-label">Description / Action Required</label>
+      <textarea id="desc-input" placeholder="Describe the issue and what needs to be done…" rows="3"></textarea>
+    </div>
+
+    <button class="voice-btn" id="voice-btn" onclick="toggleVoice()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="12" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="9" y1="22" x2="15" y2="22"/>
+      </svg>
+      <span id="voice-label">TAP TO SPEAK</span>
+    </button>
+
+    <div class="form-group">
+      <label class="form-label">Assign To</label>
+      <select id="assignee-select">
+        <option value="">— Select team member —</option>
+      </select>
+    </div>
+
+    <button class="btn btn-amber" onclick="submitTask()" style="margin-bottom:0;">LOG TASK →</button>
+  </div>
+
+  <div class="section-title" style="margin-top:6px;">TEAM MEMBERS</div>
+  <div class="add-member-row">
+    <input type="text" id="new-member-input" placeholder="Add new member name…" />
+    <button class="add-member-btn" onclick="addMember()">ADD</button>
+  </div>
+  <div id="member-list-capture" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;"></div>
+</div>
+
+<!-- ───── TASKS VIEW ───── -->
+<div class="view" id="view-tasks">
+  <div class="filter-row">
+    <select id="filter-status" onchange="renderTasks()">
+      <option value="all">All Status</option>
+      <option value="pending">Pending</option>
+      <option value="overdue">Overdue</option>
+      <option value="complete">Complete</option>
+    </select>
+    <select id="filter-assignee" onchange="renderTasks()">
+      <option value="all">All Members</option>
+    </select>
+  </div>
+  <div id="task-count" class="filter-count"></div>
+  <div id="task-list"></div>
+</div>
+
+<!-- ───── DASHBOARD VIEW ───── -->
+<div class="view" id="view-dashboard">
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="section-title">BY TEAM MEMBER</div>
+  <div id="member-stats"></div>
+  <div class="section-title" style="margin-top:20px;">OVERDUE TASKS</div>
+  <div id="overdue-list"></div>
+</div>
+
+<!-- Photo modal -->
+<div class="photo-modal" id="photo-modal" onclick="closePhotoModal()">
+  <button class="photo-modal-close">✕</button>
+  <img id="modal-img" src="" alt="Task photo">
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const TASKS_KEY = 'ywi_tasks_v4';
+const MEMBERS_KEY = 'ywi_members_v2';
+
+let tasks = [];
+let members = [];
+let cameraStream = null;
+let cameraLive = false;
+let capturedPhoto = null;
+let capturedAt = null;
+let recognition = null;
+let listening = false;
+
+// ─── Persistence ──────────────────────────────────────────────────────────────
+function save() {
+  try {
+    localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+    localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
+  } catch(e) {}
+}
+
+function load() {
+  try { tasks = JSON.parse(localStorage.getItem(TASKS_KEY)) || []; } catch { tasks = []; }
+  try { members = JSON.parse(localStorage.getItem(MEMBERS_KEY)) || defaultMembers(); } catch { members = defaultMembers(); }
+  if (tasks.length === 0) { tasks = seedTasks(); save(); }
+}
+
+function defaultMembers() {
+  return [
+    'Aiden Harte',
+    'Alan McNamara',
+    'All',
+    'Arun Dass',
+    'Calo Lategan',
+    'General',
+    'Joe Prepok',
+    'Johan Tredoux',
+    'John Maddern',
+    'Mike Clark',
+    'Reinhard Swart',
+    'Roopesh',
+    'Simon Turner',
+    'Sunny / Faizel',
+    'Vincent Nibbering',
+    'Wesley',
+  ];
+}
+
+function seedTasks() {
+  return [{"id":1000,"photo":null,"description":"Dispose of the boxes built for Carts in 2024","assignee":"Aiden Harte","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"https://drive.google.com/file/d/1pR3Bw02lTE_6bZU-pS_u0JUaw2K_8FR5/view?usp=sharing"},{"id":1001,"photo":null,"description":"Consolidate all stillages in Teratek warehouse and dispose of damaged plastic units","assignee":"Arun Dass","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/1BIDlXl6mtArzvSfaBtr5vk-w2oWxcKgG/view?usp=sharing"},{"id":1002,"photo":null,"description":"Consolidate all stillages in Teratek warehouse and dispose of damaged plastic units","assignee":"Arun Dass","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/179rLaAn9aZnhE4PXQEho5Sbl2Teg7ugs/view?usp=sharing"},{"id":1003,"photo":null,"description":"SS trailer (the small one) to be moved from PA back to SS and Calo to find a home for the trailer","assignee":"Calo Lategan","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1004,"photo":null,"description":"Re- arrangement of the SS yard - Linkable cabins","assignee":"Calo Lategan","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1005,"photo":null,"description":"Every department needs to allocate a responsible person per area that can be added to the yard color chart","assignee":"General","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1006,"photo":null,"description":"Confirm if and when the solar lighting towers will be required back in Quidiyya","assignee":"Joe Prepok","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/1lsOF7kKBR9GglAon-j7zzdqWIcFrKKOB/view?usp=sharing"},{"id":1007,"photo":null,"description":"Review what is needed here and what needs to be disposed of","assignee":"Joe Prepok","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/15lVO1Y4GboallPhTIa3-uTW2kWit_FPW/view?usp=sharing"},{"id":1008,"photo":null,"description":"Schedule the removal of the water bowser between Paintshop & Water Storage Facility.","assignee":"Joe Prepok","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"c987ffa6-3c6e-42bd-a550-4430e2665ffa.jpg"},{"id":1009,"photo":null,"description":"Confirm what the policy is for “Banksman”","assignee":"Johan Tredoux","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1010,"photo":null,"description":"Not sure who's area this is but Reinhardt to co-ordinate to have the road cleared","assignee":"Reinhard Swart","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Area has been cleaned and is still ongoing.","ref":"https://drive.google.com/file/d/1JQlfhcEMEcrW9KFajIIwZcFf62bfkobZ/view?usp=sharing"},{"id":1011,"photo":null,"description":"Refresh yard space allocation as it is now","assignee":"Reinhard Swart","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/1bfPlw3QX49-Gg4A9UaB9Un4RqQWCATeO/view?usp=sharing"},{"id":1012,"photo":null,"description":"Remove temporary storage in front of spray booth","assignee":"Reinhard Swart","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/1Cb21Cvuewi7cgpmTlNPCvoSLrWUPWAVp/view?usp=sharing"},{"id":1013,"photo":null,"description":"Temp Area at wash bay needs a solution as the items that are there are not temporary storage","assignee":"Reinhard Swart","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Balance material is the poles they will go to F1 in Eid","ref":""},{"id":1014,"photo":null,"description":"Remove Tyres, store rims","assignee":"Roopesh","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":"https://drive.google.com/file/d/1uUQ5jsp5BnygsK0GmGZSVoYl1HkCx0Nz/view?usp=sharing"},{"id":1015,"photo":null,"description":"Consolidate Aluminium Scaff into on area. Remove aluminium Scaff above PA Scissor store to Aluminium warehouse","assignee":"Simon Turner","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1016,"photo":null,"description":"Do we have a utilization number on Aluminium Scaff","assignee":"Simon Turner","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1017,"photo":null,"description":"Appoint housekeeping to individual and review how we can maximize space","assignee":"Sunny / Faizel","createdAt":"2025-12-09T00:00:00.000Z","completedAt":"2025-12-09T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1018,"photo":null,"description":"Gereral Housekeeping needs attention","assignee":"Sunny / Faizel","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"https://drive.google.com/file/d/1TmctWh7auS-eT4jsCbSzYtBhrDoP-KSA/view?usp=sharing"},{"id":1019,"photo":null,"description":"Gereral Housekeeping needs attention","assignee":"Sunny / Faizel","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"https://drive.google.com/file/d/1w7eZ4jAz-SFFvj-txCLE_HzpQgfqmjIU/view?usp=sharing"},{"id":1020,"photo":null,"description":"Gereral Housekeeping needs attention","assignee":"Sunny / Faizel","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"https://drive.google.com/file/d/1Z3fR2koh3p8gfgPDn82ZM1IJ8VXhV1ST/view?usp=sharing"},{"id":1021,"photo":null,"description":"Confirm what cabins/ containers and furniture we have in the SS laydown area that requires removal","assignee":"Vincent Nibbering","createdAt":"2025-12-09T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1022,"photo":null,"description":"USB's need to be checked on all the tornament umpire carts","assignee":"Aiden Harte","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1023,"photo":null,"description":"Demarcation of road needs to be painted","assignee":"Alan McNamara","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1024,"photo":null,"description":"Is there any limitations in terms of double stacking ablutions?","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Answer, no, Already being implemented","ref":""},{"id":1025,"photo":null,"description":"Check with James on the tounament official carts and if we can put a roof on these carts?","assignee":"Vincent Nibbering","createdAt":"2026-01-06T00:00:00.000Z","completedAt":"2026-01-06T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1026,"photo":null,"description":"Spray can may not be left lying around and must be stored in cuboards","assignee":"All","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1027,"photo":null,"description":"Disposal of the fiberglass tank - cut up and prepared for disposal","assignee":"Calo Lategan","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Awaiting final talk on processes, documentation requirements and final approval","ref":""},{"id":1028,"photo":null,"description":"Contact Peter regarding Dubai Marathon stock in contatnier","assignee":"John Maddern","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1029,"photo":null,"description":"Seating in SS warehouse needs to be moved to seating shed","assignee":"Reinhard Swart","createdAt":"2026-01-06T00:00:00.000Z","completedAt":"2026-01-06T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1030,"photo":null,"description":"Shed Allocation - Schedule of who is responsible for each shed","assignee":"John Maddern","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Included below as \"Shed Hirache"},{"id":1031,"photo":null,"description":"Inspect Busses and confirm which buses are still suitable for use","assignee":"Aiden Harte","createdAt":"2026-01-06T00:00:00.000Z","completedAt":"2026-01-06T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1032,"photo":null,"description":"3 High containers need locks urgently","assignee":"Calo Lategan","createdAt":"2026-01-06T00:00:00.000Z","completedAt":"2026-01-06T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1033,"photo":null,"description":"Tea Time Schedule","assignee":"John Maddern","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1034,"photo":null,"description":"Wood Yard has exceeded the allocated space","assignee":"Joe Prepok","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1035,"photo":null,"description":"Request to remove the wood offices in roofing store to fee up one entire floor","assignee":"Mike Clark","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1036,"photo":null,"description":"Consolidate all the aluminium scaff into one area","assignee":"Reinhard Swart","createdAt":"2026-01-06T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Trying to make more space in the back to move more material","ref":""},{"id":1037,"photo":null,"description":"Extension of the training centre yard","assignee":"Alan McNamara","createdAt":"2026-01-13T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1038,"photo":null,"description":"Space for Fly Deck","assignee":"Reinhard Swart","createdAt":"2026-01-13T00:00:00.000Z","completedAt":null,"status":"pending","comment":"We have made space in the back and will move Fly deck material as time progress","ref":""},{"id":1039,"photo":null,"description":"Engage with Alan do get a design for a suspended charging sytem","assignee":"Aiden Harte","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1040,"photo":null,"description":"Reception carts are to be exchanged by cart division. Who, when, how","assignee":"Aiden Harte","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1041,"photo":null,"description":"Pictures of the weeks yard walk","assignee":"All","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"20 Jan 2026 Pictures"},{"id":1042,"photo":null,"description":"Update the Shed Hierarchy","assignee":"All","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1043,"photo":null,"description":"Batteries need to be stored in an allocated battery store","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1044,"photo":null,"description":"Clear debres (carpets, buckets, paint) from between cabins","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1045,"photo":null,"description":"Clear walkway behind containers","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1046,"photo":null,"description":"Double stack wooden stairs on the platform above the scaff holding area","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"need to replace all older staircases with new bolt on handrails for easy removal without damaging stair cases","ref":""},{"id":1047,"photo":null,"description":"Engage with Reinhardt and crane to have the concrete blocks removed. James proposed 7's Yard","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"on hold temporarily until space to move is created","ref":""},{"id":1048,"photo":null,"description":"Move internal fittings back to store.","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1049,"photo":null,"description":"Process asset write off for ABL.M?F.20.13","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1050,"photo":null,"description":"Remove perspect signs from ablutions as part of the PDI Process","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1051,"photo":null,"description":"Remove water fiberglass water tank","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1052,"photo":null,"description":"Solve 40ft container misalignment or find out if the container can be bolted down (overlapping container)","assignee":"Calo Lategan","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1053,"photo":null,"description":"Co-ordinate a visit to the 7's yard","assignee":"Reinhard Swart","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"The pictures have been shared with Mike if need to visit again we can contact Donovan as he is the PM on site.","ref":""},{"id":1054,"photo":null,"description":"How do we re-brand the Buryn seats","assignee":"Reinhard Swart","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1055,"photo":null,"description":"Ladder store needs to be repacked, ladders shortened where damaged and wooden ladders written off","assignee":"Reinhard Swart","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Damage ladders has been cut and made to new size , we are still packing areas nicely","ref":""},{"id":1056,"photo":null,"description":"Solution to ensure that Grandstand seats are clean before being sent to site","assignee":"Reinhard Swart","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"Cleaning kit will be added to toolbox that will go wth Grandstand material and the PM must make sure that it is clean before handover.","ref":""},{"id":1057,"photo":null,"description":"Dispose of the plastic sweeper cover in the \"sumner space\"","assignee":"Roopesh","createdAt":"2026-01-20T00:00:00.000Z","completedAt":"2026-01-20T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1058,"photo":null,"description":"Lets clear out Pavi's rest area and make it a comfortable space for all staff to enjoy","assignee":"Roopesh","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1059,"photo":null,"description":"Co-ordinate with Reinard for an A frame to hoist gearboxes onto bench","assignee":"Sunny / Faizel","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1060,"photo":null,"description":"Oil drums need a bunded area e.g. 115% capacity oil tray","assignee":"Sunny / Faizel","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1061,"photo":null,"description":"We need an imprved staircase hand railing","assignee":"Vincent Nibbering","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1062,"photo":null,"description":"What does the future look like for fabrication/ What is the ideal layout","assignee":"Wesley","createdAt":"2026-01-20T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1063,"photo":null,"description":"Can the plastic charge ports be used for the cart stores","assignee":"Aiden Harte","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1064,"photo":null,"description":"Check carts on the external upper deck tyre pressures - See pic in folder","assignee":"Aiden Harte","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1065,"photo":null,"description":"Dispose of the old wooden buggy boxes","assignee":"Aiden Harte","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1066,"photo":null,"description":"Find out what the frame is for at the foot of the staircase - Rent it, fix it or sell it","assignee":"Aiden Harte","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1067,"photo":null,"description":"Pictures of the weeks yard walk","assignee":"All","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1068,"photo":null,"description":"Clear \"white backings\", balast etc from shaded are to make space for the trailors, picknick benches etc","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1069,"photo":null,"description":"Create space for the picknick benches under the shaded areas","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"On hold until old picnic benches are refurnished","ref":""},{"id":1070,"photo":null,"description":"Explore if the power cable in the centre of the Flexi Loo strore needs to remain or if it can be moved to avoid impact risk","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1071,"photo":null,"description":"PDI Process for assets entering the yard","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1072,"photo":null,"description":"Place all fold up tables in store, flag pole bases and any other items in their respective designated spaces","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1073,"photo":null,"description":"Speak to Chantel regarding the donated cabin","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1074,"photo":null,"description":"Stock take in store and pipe rack outside the warehouse","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1075,"photo":null,"description":"Write off the old stairs, plastic hand washing stations in the area between SS Yard & SS warehouse","assignee":"Calo Lategan","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1076,"photo":null,"description":"What will we do with the space created next to the spray bay","assignee":"Joe Prepok","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Exploring the option of this space for Scissor lift parking. Request received for use of this area by paint booth in respect of a preparation area as opposed to the access area for the workshops"},{"id":1077,"photo":null,"description":"Investigate a secondary life for the blue (old) lighting towers","assignee":"Joe Prepok","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Cost analysis & Bus case?"},{"id":1078,"photo":null,"description":"Use one of the charging ports to set up a charging station for the buggy used by carpentry","assignee":"Joe Prepok","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1079,"photo":null,"description":"Find a solution for re-using the grandstand boards. Strip the aluminium sleeves and then re-fit to new boards","assignee":"Reinhard Swart","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1080,"photo":null,"description":"Packing process to be address in the space between SS Store and SS yard - Balast area in particular","assignee":"Reinhard Swart","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1081,"photo":null,"description":"Chase scrap dealer for the engines and associated scrap metal waiting at the disposal area","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1082,"photo":null,"description":"Dispose of the lighting tower parts lying in fron to the Water Tank","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1083,"photo":null,"description":"Is the \"overhead charging\" that Alan & Aiden are exploring an option for the scissor charge bay? This could keep the cables off the floor","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1084,"photo":null,"description":"Make the store under the Scissor store staircase functional","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1085,"photo":null,"description":"Oil drums in the workshop need to be placed in a \"bunded\" area. Bunded area must be 110% of oil capacity","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1086,"photo":null,"description":"Upstirs of scissor store is to be set up to house harvestedl large items (Engine Bunnets, Booms etc)","assignee":"Roopesh","createdAt":"2026-01-27T00:00:00.000Z","completedAt":"2026-01-27T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1087,"photo":null,"description":"Oil now has a drip tray but needs a bunded tray that can hold 110% of the drum capacity","assignee":"Sunny / Faizel","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1088,"photo":null,"description":"Find a solution to stop the spray painters placing assets in the path of Powered Access","assignee":"Wesley","createdAt":"2026-01-27T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1089,"photo":null,"description":"Can we use the old water dispensers that have been changed to charging stations as charging stations for the carts in the yard","assignee":"Aiden Harte","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1090,"photo":null,"description":"Discard white cart box in front of store","assignee":"Aiden Harte","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1091,"photo":null,"description":"Speak to Sunny about the roof rack lying next to the cart warehouse door","assignee":"Aiden Harte","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1092,"photo":null,"description":"How did the new light poles end up in the Powered access space. These can be run over","assignee":"Alan McNamara","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1093,"photo":null,"description":"Photo's from yard walk","assignee":"All","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Pictures 10 Feb 2026"},{"id":1094,"photo":null,"description":"Balast must come out from under the covered area","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"will be moved as more space is created on next crane  is in the yard and we shift the layout more","ref":""},{"id":1095,"photo":null,"description":"Picnic benches must be stored under roof","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1096,"photo":null,"description":"Pipe store outside the warehouse needs a plan","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1097,"photo":null,"description":"The vanities need to be covered with the covers in the store","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1098,"photo":null,"description":"The white cuboards/ backins need to go into the furniture store","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1099,"photo":null,"description":"Water dispenser needs to be covered","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"will organise to do this today (3/9/2026)","ref":""},{"id":1100,"photo":null,"description":"Write off the damaged cabin (the unit with the rusted base)","assignee":"Calo Lategan","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1101,"photo":null,"description":"Do we have an exchange policy for the reception carts","assignee":"Joe Prepok","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1102,"photo":null,"description":"Medical Centre needs to be re-painted","assignee":"Johan Tredoux","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1103,"photo":null,"description":"Wood Yard has exceeded the allocated space","assignee":"Joe Prepok","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1104,"photo":null,"description":"Find a suitable place to store the Telehandlers buckets","assignee":"Reinhard Swart","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"The Buckets have been there since 05/05/2019 we have put them on the side walk to be out of the way for the scissor lift","ref":""},{"id":1105,"photo":null,"description":"Please re-stack the scaffolding poles that are leaning. This could fall and cause an injury","assignee":"Reinhard Swart","createdAt":"2026-02-10T00:00:00.000Z","completedAt":"2026-02-10T00:00:00.000Z","status":"complete","comment":"This will be a ongoing event as we are trying to find new ways to stack and store material.","ref":""},{"id":1106,"photo":null,"description":"Review write off process for the steel stacked in front of the stores","assignee":"Reinhard Swart","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"The Black material we have recived aproval to scrap Fabrication is making it smaller and we will scrap","ref":""},{"id":1107,"photo":null,"description":"We need to contract for the under cover space outside SS Warehouse","assignee":"Reinhard Swart","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"We will be storing the picket fence under the shed to create space in the work the building for storage for Grandstand material.","ref":""},{"id":1108,"photo":null,"description":"Damaged basket in front of water tank needs to go to write off bin/ skip","assignee":"Roopesh","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1109,"photo":null,"description":"Use the Pavi Camp as a space for the team to meet","assignee":"Roopesh","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1110,"photo":null,"description":"We need a solution for the damages caused to the vanities - See pics","assignee":"Vincent Nibbering","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1111,"photo":null,"description":"Contract with PA for space next to the spray booth. Product can not be stored in the path to PA","assignee":"Wesley","createdAt":"2026-02-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1112,"photo":null,"description":"Removal of movable shade store outside Scissor store","assignee":"Wesley","createdAt":"2026-02-17T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1113,"photo":null,"description":"Wood is blocking the road between carpentry and paint store","assignee":"Joe Prepok","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1114,"photo":null,"description":"Yana's boxes in the SS Warehouse need to be moved","assignee":"Reinhard Swart","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1115,"photo":null,"description":"What is the plan for the \"Mike Trailer\"","assignee":"Vincent Nibbering","createdAt":"2026-02-17T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1116,"photo":null,"description":"Close out trailer write off","assignee":"Calo Lategan","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1117,"photo":null,"description":"Do asset write off process for the light pole lying in front of the wash bay","assignee":"Reinhard Swart","createdAt":"2026-02-17T00:00:00.000Z","completedAt":null,"status":"pending","comment":"This poles has been sold to F1 and will be deliverd in Eid when the site starts again.","ref":""},{"id":1118,"photo":null,"description":"Remove balast between SS Cabin area and staging structures","assignee":"Calo Lategan","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1119,"photo":null,"description":"Free up space between next to staging area","assignee":"Reinhard Swart","createdAt":"2026-02-17T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Not exactly sure on this ?","ref":""},{"id":1120,"photo":null,"description":"Find a workshop for the aircon's and place the units stacked in the first row in the workshop","assignee":"Calo Lategan","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1121,"photo":null,"description":"Stack all stairs on the upper decks of the storage facilities","assignee":"Calo Lategan","createdAt":"2026-02-17T00:00:00.000Z","completedAt":"2026-02-17T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1122,"photo":null,"description":"Disposal of the fiberglass tank - cut up and prepared for disposal/ Obtain a \"waste carrier acceptance certificate\" from appropriate Scrap Dealer.  The Scrappie applies for the Waste Disposal Cert from Dubai Municipality.  SS to contact the Scrappy what was the tank used for, weight, size.  The Scrap Dealer must be registered with the Dubai Municipality.  If it will be disposed of in another Emirate (outside Dubai), we require the NOC advising where this tank will be disposed.","assignee":"Calo Lategan","createdAt":"2026-02-24T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Acceptance from waste carrier/"},{"id":1123,"photo":null,"description":"Pictures of the weeks yard walk","assignee":"All","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":"Pictures 10 March 2026"},{"id":1124,"photo":null,"description":"Telehandler Buckets need to be moved to PA upper floor storage area","assignee":"Reinhard Swart","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1125,"photo":null,"description":"Fire Extinguisher tucked between Diesel Scissors and Telehandler Buckets needs to be moved to ensure access","assignee":"Reinhard Swart","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1126,"photo":null,"description":"Diesel Scissors can not be stacked in the path of trucks","assignee":"Roopesh","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"Area is marked and kept limited within the \"parking area\".","ref":""},{"id":1127,"photo":null,"description":"Light Pole is going out to the customer week ending 13 March","assignee":"Reinhard Swart","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1128,"photo":null,"description":"Painting structure needs MS&RS. Structure can not be used until this is completted","assignee":"Wesley","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1129,"photo":null,"description":"Pavi's \"second Office\" needs to be removed. This space can be better utilized","assignee":"Roopesh","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1130,"photo":null,"description":"Cupboards in the scissor space need to be replaced. Roopesh to speak to Carpentry to build Al Laith standard cupboards","assignee":"Roopesh","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1131,"photo":null,"description":"Waste bin  needs to be placed at Buggy store Exclusively for Oil Bottles.","assignee":"Aiden Harte","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1132,"photo":null,"description":"Remove Grey Buggy Boxes from behind the warehouses and scrap them","assignee":"Aiden Harte","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1133,"photo":null,"description":"VIP lift has been dismantled and has been placed on a pallet in the Buggy designated area. This needs to be moved","assignee":"Sunny / Faizel","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1134,"photo":null,"description":"Does the old VIP lift still need to be kept? It is consuming space that can be utilized for other items - Please see pictures","assignee":"Sunny / Faizel","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1135,"photo":null,"description":"Y/ Drone looking frames  behind the warehouses needs to be collected by origional owner","assignee":"Reinhard Swart","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1136,"photo":null,"description":"Temporary Structure behind mast climber store needs MSRA and needs inspection befor it can be used","assignee":"Reinhard Swart","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1137,"photo":null,"description":"Vanities and Flexi Loo's need to be covered with the covers in the store","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":"2026-03-10T00:00:00.000Z","status":"complete","comment":"Should order more and change design later on","ref":""},{"id":1138,"photo":null,"description":"The furniture in the corner of the SS Warehouse needs to sorted and old items needs to be discarded","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":"2026-03-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1139,"photo":null,"description":"Picknick benches standing next to the SS store needs to be moved inside","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":"2026-03-10T00:00:00.000Z","status":"complete","comment":"","ref":""},{"id":1140,"photo":null,"description":"All stairs need to be stacked and packed away. New stair system needs to be thought through for 2026 Season","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1141,"photo":null,"description":"Perspecs signs needs to be taken off the ablutions as PDI process.","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":"2026-03-10T00:00:00.000Z","status":"complete","comment":"will continue to keep them removed and stored near","ref":""},{"id":1142,"photo":null,"description":"Is pumping water from the truck to clean chemical toilets the best practice? Should we not have a small washbay?","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""},{"id":1143,"photo":null,"description":"ABL20M/F/05 has this unit been PDI'ed? What has been PID'ed? Do we have a \"rental ready list\"","assignee":"Calo Lategan","createdAt":"2026-03-10T00:00:00.000Z","completedAt":null,"status":"pending","comment":"","ref":""}];
+}
+
+// ─── Date / working day helpers ───────────────────────────────────────────────
+function workingDaysSince(dateStr) {
+  const start = new Date(dateStr);
+  const now = new Date();
+  let count = 0;
+  let d = new Date(start);
+  d.setDate(d.getDate() + 1);
+  while (d <= now) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function isOverdue(task) {
+  return task.status !== 'complete' && workingDaysSince(task.createdAt) > 10;
+}
+
+function fmtDate(s) {
+  return new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtDateTime(s) {
+  return new Date(s).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Members ──────────────────────────────────────────────────────────────────
+function populateSelects() {
+  const opts = members.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  document.getElementById('assignee-select').innerHTML = '<option value="">— Select team member —</option>' + opts;
+  document.getElementById('filter-assignee').innerHTML = '<option value="all">All Members</option>' + opts;
+  // Member chips in capture view
+  document.getElementById('member-list-capture').innerHTML = members.map(m =>
+    `<span class="badge badge-gray" style="cursor:default;">${esc(m)}</span>`
+  ).join('');
+}
+
+function addMember() {
+  const inp = document.getElementById('new-member-input');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (members.includes(name)) { showToast('Member already on team'); return; }
+  members.push(name);
+  save();
+  populateSelects();
+  inp.value = '';
+  showToast(name + ' added');
+}
+
+// ─── Camera ───────────────────────────────────────────────────────────────────
+async function openCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } },
+      audio: false
+    });
+    const video = document.getElementById('video-feed');
+    video.srcObject = cameraStream;
+    video.style.display = 'block';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('ts-overlay').style.display = 'none';
+    document.getElementById('photo-preview').style.display = 'none';
+    setCameraControls('live');
+    cameraLive = true;
+  } catch(err) {
+    showToast('Camera unavailable — check permissions');
+  }
+}
+
+function cancelCamera() {
+  stopStream();
+  document.getElementById('video-feed').style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  setCameraControls('idle');
+  cameraLive = false;
+}
+
+function capturePhoto() {
+  const video = document.getElementById('video-feed');
+  const canvas = document.getElementById('capture-canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+
+  const now = new Date();
+  const tsText = now.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+
+  // Burn timestamp onto photo
+  const barH = Math.max(34, canvas.height * 0.045);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+  ctx.fillStyle = '#FFD166';
+  ctx.font = `bold ${Math.max(13, barH * 0.45)}px monospace`;
+  ctx.fillText('YARD WALK · ' + tsText, 10, canvas.height - barH * 0.22);
+
+  capturedPhoto = canvas.toDataURL('image/jpeg', 0.88);
+  capturedAt = now.toISOString();
+
+  stopStream();
+  document.getElementById('video-feed').style.display = 'none';
+  const preview = document.getElementById('photo-preview');
+  preview.src = capturedPhoto;
+  preview.style.display = 'block';
+  document.getElementById('ts-overlay').textContent = tsText;
+  document.getElementById('ts-overlay').style.display = 'block';
+  document.getElementById('cam-placeholder').style.display = 'none';
+
+  setCameraControls('preview');
+  cameraLive = false;
+  showToast('Photo captured');
+}
+
+function retakePhoto() {
+  capturedPhoto = null;
+  capturedAt = null;
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('ts-overlay').style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  setCameraControls('idle');
+}
+
+function setCameraControls(state) {
+  const el = document.getElementById('camera-controls');
+  if (state === 'idle') {
+    el.innerHTML = '<button class="btn btn-amber" onclick="openCamera()">Open Camera</button>';
+  } else if (state === 'live') {
+    el.innerHTML = `
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="cancelCamera()" style="flex:1;">Cancel</button>
+        <button class="btn btn-amber" onclick="capturePhoto()" style="flex:2;">📷 Capture</button>
+      </div>`;
+  } else if (state === 'preview') {
+    el.innerHTML = '<button class="btn btn-outline" onclick="retakePhoto()">🔄 Retake Photo</button>';
+  }
+}
+
+function stopStream() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+}
+
+// ─── Voice ────────────────────────────────────────────────────────────────────
+function toggleVoice() {
+  listening ? stopListening() : startListening();
+}
+
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Voice not supported — try Chrome or Safari'); return; }
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+  recognition.onresult = (e) => {
+    let t = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) t += e.results[i][0].transcript + ' ';
+    }
+    const ta = document.getElementById('desc-input');
+    ta.value = (ta.value.trimEnd() + ' ' + t).trimStart();
+  };
+  recognition.onerror = () => stopListening();
+  recognition.onend = () => { if (listening) { try { recognition.start(); } catch(e) {} } };
+  recognition.start();
+  listening = true;
+  document.getElementById('voice-btn').classList.add('listening');
+  document.getElementById('voice-label').textContent = 'LISTENING… TAP TO STOP';
+}
+
+function stopListening() {
+  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+  listening = false;
+  document.getElementById('voice-btn').classList.remove('listening');
+  document.getElementById('voice-label').textContent = 'TAP TO SPEAK';
+}
+
+// ─── Submit task ──────────────────────────────────────────────────────────────
+function submitTask() {
+  const desc = document.getElementById('desc-input').value.trim();
+  const assignee = document.getElementById('assignee-select').value;
+  if (!desc) { showToast('Add a description first'); return; }
+  if (!assignee) { showToast('Assign this task to someone'); return; }
+
+  const task = {
+    id: Date.now(),
+    photo: capturedPhoto,
+    description: desc,
+    assignee,
+    createdAt: capturedAt || new Date().toISOString(),
+    completedAt: null,
+    status: 'pending',
+  };
+  tasks.unshift(task);
+  save();
+
+  // Reset
+  document.getElementById('desc-input').value = '';
+  document.getElementById('assignee-select').value = '';
+  stopListening();
+  retakePhoto();
+  updateBadge();
+  showToast('✓ Task logged');
+  setTimeout(() => switchView('tasks'), 900);
+}
+
+// ─── Complete / delete ────────────────────────────────────────────────────────
+function markComplete(id) {
+  const t = tasks.find(t => t.id === id);
+  if (!t) return;
+  t.status = 'complete';
+  t.completedAt = new Date().toISOString();
+  save();
+  updateBadge();
+  renderTasks();
+  showToast('Task marked complete');
+}
+
+function deleteTask(id) {
+  if (!confirm('Remove this task permanently?')) return;
+  tasks = tasks.filter(t => t.id !== id);
+  save();
+  updateBadge();
+  renderTasks();
+}
+
+// ─── Render tasks ─────────────────────────────────────────────────────────────
+function renderTasks() {
+  const sf = document.getElementById('filter-status').value;
+  const af = document.getElementById('filter-assignee').value;
+
+  let filtered = tasks.filter(t => {
+    if (sf === 'pending' && t.status !== 'pending') return false;
+    if (sf === 'complete' && t.status !== 'complete') return false;
+    if (sf === 'overdue' && !isOverdue(t)) return false;
+    if (af !== 'all' && t.assignee !== af) return false;
+    return true;
+  });
+
+  document.getElementById('task-count').textContent = `${filtered.length} task${filtered.length !== 1 ? 's' : ''}`;
+
+  const container = document.getElementById('task-list');
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state"><span class="empty-state-icon">📋</span><div class="empty-state-text">No tasks match the filters</div></div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(task => {
+    const over = isOverdue(task);
+    const done = task.status === 'complete';
+    const days = workingDaysSince(task.createdAt);
+
+    const statusBadge = done
+      ? `<span class="badge badge-green">COMPLETE</span>`
+      : over
+        ? `<span class="badge badge-red">OVERDUE</span>`
+        : `<span class="badge badge-amber">PENDING</span>`;
+
+    const thumb = task.photo
+      ? `<div class="task-thumb" onclick="openPhotoModal('${task.id}')" style="cursor:pointer;">
+           <img src="${task.photo}" alt="Task photo">
+         </div>`
+      : `<div class="task-thumb">
+           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9B9A96" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+             <rect x="3" y="3" width="18" height="18" rx="2"/>
+             <circle cx="8.5" cy="8.5" r="1.5"/>
+             <polyline points="21 15 16 10 5 21"/>
+           </svg>
+         </div>`;
+
+    const daysLabel = done
+      ? `Completed ${fmtDate(task.completedAt)}`
+      : `${days} working day${days !== 1 ? 's' : ''} elapsed`;
+
+    const action = done
+      ? `<button onclick="deleteTask(${task.id})" class="complete-btn" style="color:var(--red-dark);border-color:var(--red-light);">Remove</button>`
+      : `<button onclick="markComplete(${task.id})" class="complete-btn">✓ Mark Complete</button>`;
+
+    return `
+      <div class="task-card ${over ? 'overdue' : ''} ${done ? 'complete' : ''}">
+        ${thumb}
+        <div class="task-body">
+          <div class="task-desc">${esc(task.description)}</div>
+          <div class="task-meta">
+            ${statusBadge}
+            <span class="badge badge-gray">${esc(task.assignee)}</span>
+          </div>
+          <div class="task-date">Logged ${fmtDate(task.createdAt)} · ${daysLabel}</div>
+          ${action}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Render dashboard ─────────────────────────────────────────────────────────
+function renderDashboard() {
+  const total = tasks.length;
+  const pending = tasks.filter(t => t.status === 'pending').length;
+  const complete = tasks.filter(t => t.status === 'complete').length;
+  const overdue = tasks.filter(isOverdue).length;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total Tasks</div>
+      <div class="stat-value">${total}</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value">${pending}</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Complete</div>
+      <div class="stat-value">${complete}</div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-label">Overdue</div>
+      <div class="stat-value">${overdue}</div>
+    </div>`;
+
+  // Per-member stats
+  const maxPending = Math.max(...members.map(m => tasks.filter(t => t.assignee === m && t.status === 'pending').length), 1);
+
+  document.getElementById('member-stats').innerHTML = members.map(m => {
+    const mTasks = tasks.filter(t => t.assignee === m);
+    const mPending = mTasks.filter(t => t.status === 'pending').length;
+    const mOverdue = mTasks.filter(isOverdue).length;
+    const mDone = mTasks.filter(t => t.status === 'complete').length;
+    const pct = Math.round((mPending / maxPending) * 100);
+
+    return `
+      <div class="member-row">
+        <div class="member-row-top">
+          <div class="member-name">${esc(m)}</div>
+          <div class="member-counts">
+            ${mOverdue > 0 ? `<span class="badge badge-red">${mOverdue} overdue</span>` : ''}
+            <span class="badge badge-amber">${mPending} pending</span>
+            <span class="badge badge-green">${mDone} done</span>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill ${mOverdue > 0 ? 'danger' : ''}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Overdue list
+  const overdueItems = tasks.filter(isOverdue).sort((a, b) =>
+    workingDaysSince(b.createdAt) - workingDaysSince(a.createdAt)
+  );
+
+  if (overdueItems.length === 0) {
+    document.getElementById('overdue-list').innerHTML =
+      `<div class="card" style="color:var(--green);text-align:center;font-size:14px;font-weight:500;">No overdue tasks — great work! 🎉</div>`;
+    return;
+  }
+
+  document.getElementById('overdue-list').innerHTML = overdueItems.map(task => {
+    const days = workingDaysSince(task.createdAt);
+    return `
+      <div class="overdue-item">
+        <div class="overdue-item-desc">${esc(task.description)}</div>
+        <div class="overdue-item-meta">
+          <span class="badge badge-gray">${esc(task.assignee)}</span>
+          <span class="badge badge-red">${days} working days</span>
+          <span class="overdue-item-date">Since ${fmtDate(task.createdAt)}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Photo modal ──────────────────────────────────────────────────────────────
+function openPhotoModal(taskId) {
+  const task = tasks.find(t => t.id == taskId);
+  if (!task || !task.photo) return;
+  document.getElementById('modal-img').src = task.photo;
+  document.getElementById('photo-modal').classList.add('open');
+}
+
+function closePhotoModal() {
+  document.getElementById('photo-modal').classList.remove('open');
+}
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function switchView(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  const idx = ['capture', 'tasks', 'dashboard'].indexOf(view);
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+  if (view === 'tasks') renderTasks();
+  if (view === 'dashboard') renderDashboard();
+}
+
+// ─── Badge & toast ────────────────────────────────────────────────────────────
+function updateBadge() {
+  const n = tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('pending-badge').textContent = n > 0 ? `(${n})` : '';
+}
+
+function showToast(msg, ms = 2600) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+load();
+populateSelects();
+updateBadge();
+renderTasks();
+
+document.getElementById('new-member-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addMember();
+});
+
+// Prevent accidental back-navigation while camera is live
+window.addEventListener('beforeunload', () => stopStream());
+</script>
+</body>
+</html>
