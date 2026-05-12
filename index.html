@@ -232,6 +232,25 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .overdue-item-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .overdue-item-date{font-size:11px;color:var(--text-muted);}
 
+/* Sync dot */
+.sync-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto;
+  transition:background 0.3s;
+}
+.sync-dot.idle{background:var(--green);}
+.sync-dot.syncing{background:var(--amber);animation:pulse 1s ease-in-out infinite;}
+.sync-dot.error{background:var(--red);}
+.sync-dot.offline{background:var(--gray-200);}
+
+/* Refresh button */
+.refresh-btn{
+  background:none;border:1px solid var(--border-strong);border-radius:var(--r-sm);
+  padding:5px 10px;font-family:var(--font-h);font-size:11px;font-weight:700;
+  letter-spacing:0.5px;color:var(--text-muted);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.refresh-btn:active{opacity:0.6;}
+
 /* Photo modal */
 .photo-modal{
   display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:200;
@@ -253,6 +272,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   <div class="app-title">
     <span class="title-dot"></span>
     YARD WALK INSPECTOR
+    <span id="sync-dot" class="sync-dot offline" title="Sheet not configured"></span>
   </div>
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchView('capture')">CAPTURE</button>
@@ -328,7 +348,10 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <option value="all">All Members</option>
     </select>
   </div>
-  <div id="task-count" class="filter-count"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <div id="task-count" class="filter-count" style="margin-bottom:0;"></div>
+    <button class="refresh-btn" onclick="manualRefresh()">↻ REFRESH</button>
+  </div>
   <div id="task-list"></div>
 </div>
 
@@ -352,8 +375,13 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
-const TASKS_KEY = 'ywi_tasks_v4';
+const TASKS_KEY   = 'ywi_tasks_v4';
 const MEMBERS_KEY = 'ywi_members_v2';
+
+// ─── Sheet Sync Config ────────────────────────────────────────────────────────
+// Paste your Google Apps Script web app URL here to enable cross-device sharing.
+// Leave as '' to run in local-only mode (no changes needed to existing behaviour).
+const SHEET_URL = '';
 
 let tasks = [];
 let members = [];
@@ -457,6 +485,95 @@ function addMember() {
   populateSelects();
   inp.value = '';
   showToast(name + ' added');
+}
+
+// ─── Sheet Sync ───────────────────────────────────────────────────────────────
+let _syncing = false;
+
+function setSyncStatus(s) {
+  const el = document.getElementById('sync-dot');
+  if (!el) return;
+  el.className = 'sync-dot ' + s;
+  el.title = {
+    idle:    'Synced with shared sheet',
+    syncing: 'Syncing…',
+    error:   'Sync failed — check connection',
+    offline: 'Local only — sheet not configured',
+  }[s] || '';
+}
+
+function manualRefresh() {
+  if (!SHEET_URL) { showToast('Sheet URL not configured'); return; }
+  syncFromSheet();
+}
+
+async function sheetCall(params) {
+  const url = SHEET_URL + '?' + new URLSearchParams({ ...params, t: Date.now() });
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function sheetFire(params) {
+  if (!SHEET_URL) return;
+  const url = SHEET_URL + '?' + new URLSearchParams({ ...params, t: Date.now() });
+  fetch(url).catch(() => {});
+}
+
+async function pushTasksToSheet(batch) {
+  const CHUNK = 20;
+  for (let i = 0; i < batch.length; i += CHUNK) {
+    const chunk = batch.slice(i, i + CHUNK).map(({ photo, ...r }) => r);
+    await sheetCall({ action: 'batch_add', data: JSON.stringify(chunk) }).catch(() => {});
+  }
+}
+
+async function syncFromSheet() {
+  if (!SHEET_URL || _syncing) return;
+  _syncing = true;
+  setSyncStatus('syncing');
+  try {
+    const sheetTasks = await sheetCall({ action: 'fetch' });
+
+    const sheetById = {}, localById = {};
+    sheetTasks.forEach(t => { sheetById[String(t.id)] = t; });
+    tasks.forEach(t => { localById[String(t.id)] = t; });
+
+    // Push any local tasks not yet on Sheet (runs in background — non-blocking)
+    const localOnly = tasks.filter(t => !sheetById[String(t.id)]);
+    if (localOnly.length) pushTasksToSheet(localOnly);
+
+    // Merge: Sheet is authoritative for all fields except photo (local only)
+    const merged = sheetTasks.map(st => ({
+      id:          Number(st.id),
+      description: st.description,
+      assignee:    st.assignee,
+      createdAt:   st.createdAt,
+      completedAt: st.completedAt || null,
+      status:      st.status,
+      comment:     st.comment || '',
+      ref:         st.ref    || '',
+      photo:       (localById[String(st.id)] || {}).photo || null,
+    }));
+
+    // Preserve optimistic-local tasks (just submitted, not yet confirmed in Sheet)
+    const mergedIds = new Set(merged.map(t => String(t.id)));
+    const unconfirmed = tasks.filter(t => !mergedIds.has(String(t.id)));
+
+    tasks = [...unconfirmed, ...merged].sort((a, b) => b.id - a.id);
+    save();
+    updateBadge();
+
+    const active = document.querySelector('.view.active');
+    if (active?.id === 'view-tasks')     renderTasks();
+    if (active?.id === 'view-dashboard') renderDashboard();
+    setSyncStatus('idle');
+  } catch (err) {
+    console.warn('Sync error:', err);
+    setSyncStatus('error');
+  } finally {
+    _syncing = false;
+  }
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -607,6 +724,10 @@ function submitTask() {
   };
   tasks.unshift(task);
   save();
+  if (SHEET_URL) {
+    const { photo, ...rest } = task;
+    sheetFire({ action: 'add', data: JSON.stringify(rest) });
+  }
 
   // Reset
   document.getElementById('desc-input').value = '';
@@ -625,6 +746,7 @@ function markComplete(id) {
   t.status = 'complete';
   t.completedAt = new Date().toISOString();
   save();
+  sheetFire({ action: 'complete', id: t.id, completedAt: t.completedAt });
   updateBadge();
   renderTasks();
   showToast('Task marked complete');
@@ -634,6 +756,7 @@ function deleteTask(id) {
   if (!confirm('Remove this task permanently?')) return;
   tasks = tasks.filter(t => t.id !== id);
   save();
+  sheetFire({ action: 'delete', id });
   updateBadge();
   renderTasks();
 }
@@ -801,8 +924,8 @@ function switchView(view) {
   document.getElementById('view-' + view).classList.add('active');
   const idx = ['capture', 'tasks', 'dashboard'].indexOf(view);
   document.querySelectorAll('.tab-btn')[idx].classList.add('active');
-  if (view === 'tasks') renderTasks();
-  if (view === 'dashboard') renderDashboard();
+  if (view === 'tasks')     { renderTasks();     syncFromSheet(); }
+  if (view === 'dashboard') { renderDashboard(); syncFromSheet(); }
 }
 
 // ─── Badge & toast ────────────────────────────────────────────────────────────
@@ -823,6 +946,8 @@ load();
 populateSelects();
 updateBadge();
 renderTasks();
+if (!SHEET_URL) setSyncStatus('offline');
+else syncFromSheet();
 
 document.getElementById('new-member-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') addMember();
