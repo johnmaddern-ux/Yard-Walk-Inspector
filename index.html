@@ -250,6 +250,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   -webkit-tap-highlight-color:transparent;
 }
 .refresh-btn:active{opacity:0.6;}
+.export-btn{border-color:var(--amber);color:var(--amber-dark);}
 
 /* Photo modal */
 .photo-modal{
@@ -348,9 +349,12 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <option value="all">All Members</option>
     </select>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;">
     <div id="task-count" class="filter-count" style="margin-bottom:0;"></div>
-    <button class="refresh-btn" onclick="manualRefresh()">↻ REFRESH</button>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button class="refresh-btn export-btn" onclick="exportCSV()">⬇ EXPORT</button>
+      <button class="refresh-btn" onclick="manualRefresh()">↻ REFRESH</button>
+    </div>
   </div>
   <div id="task-list"></div>
 </div>
@@ -827,6 +831,64 @@ function renderTasks() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ─── Export to CSV ────────────────────────────────────────────────────────────
+function csvCell(v) {
+  // Wrap every field in quotes; double any embedded quotes. Safe for commas/newlines.
+  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+}
+
+function exportCSV() {
+  // Respect the currently selected filters (default All/All = full consolidated list)
+  const sf = document.getElementById('filter-status').value;
+  const af = document.getElementById('filter-assignee').value;
+
+  const rows = tasks.filter(t => {
+    if (sf === 'pending'  && t.status !== 'pending')  return false;
+    if (sf === 'complete' && t.status !== 'complete') return false;
+    if (sf === 'overdue'  && !isOverdue(t))           return false;
+    if (af !== 'all' && t.assignee !== af)            return false;
+    return true;
+  });
+
+  if (!rows.length) { showToast('No tasks to export for this filter'); return; }
+
+  const headers = ['Ref #', 'Description', 'Assignee', 'Status',
+                   'Date Logged', 'Working Days Elapsed', 'Completed Date',
+                   'Comment', 'Reference'];
+
+  const lines = [headers.map(csvCell).join(',')];
+  rows.forEach(t => {
+    const status = t.status === 'complete' ? 'Complete' : (isOverdue(t) ? 'Overdue' : 'Pending');
+    lines.push([
+      t.id,
+      t.description,
+      t.assignee,
+      status,
+      fmtDate(t.createdAt),
+      t.status === 'complete' ? '' : workingDaysSince(t.createdAt),
+      t.completedAt ? fmtDate(t.completedAt) : '',
+      t.comment,
+      t.ref
+    ].map(csvCell).join(','));
+  });
+
+  // Prepend UTF-8 BOM so Excel reads accented characters correctly
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `yard-walk-action-items-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  showToast(`Exported ${rows.length} task${rows.length !== 1 ? 's' : ''}`);
 }
 
 // ─── Render dashboard ─────────────────────────────────────────────────────────
